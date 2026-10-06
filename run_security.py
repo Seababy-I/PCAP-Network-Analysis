@@ -3,7 +3,11 @@ from crypto_utils import (
     verify_evidence_file
 )
 from risk_scoring import calculate_risk_score
-from database import insert_alert, query_alerts
+from database import (
+    insert_evidence,
+    insert_alert,
+    query_alerts
+)
 from weak_crypto import detect_weak_tls
 from tls_security import calculate_tls_security_score
 
@@ -21,6 +25,20 @@ hash_value, saved_signature = secure_evidence(pcap_path)
 print("Evidence secured successfully!")
 print("SHA-256:", hash_value)
 print("Signature:", saved_signature)
+
+
+# ==========================================
+# Store Evidence in Database
+# ==========================================
+
+evidence_id = insert_evidence(
+    filename=pcap_path,
+    sha256=hash_value,
+    signature=saved_signature
+)
+
+print("Evidence stored in database.")
+print("Evidence ID:", evidence_id)
 
 
 # ==========================================
