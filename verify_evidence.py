@@ -5,7 +5,7 @@ from crypto_utils import (
 )
 
 
-pcap_path = "data/tampered.pcap"
+pcap_path = "data/sample.pcap"
 signature_path = "signatures/sample.pcap.sig"
 
 # Load saved public key
