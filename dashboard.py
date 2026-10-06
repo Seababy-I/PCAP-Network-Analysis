@@ -320,15 +320,51 @@ with col2:
             st.error(
                 f"Report verification failed: {e}"
             )
+
 # ==========================================
 # Detected Alerts
 # ==========================================
 
+# ==========================================
+# Alert Search
+# ==========================================
+
+st.subheader("🔎 Search Alerts")
+
+search_text = st.text_input(
+    "Search by alert type or description",
+    placeholder="e.g. certificate, host scan, cipher"
+)
+severity_filter = st.selectbox(
+    "Filter by severity",
+    ["All", "High", "Medium", "Low"]
+)
+filtered_alerts = alerts
+
+if search_text:
+    search_text = search_text.lower()
+
+    filtered_alerts = [
+        alert
+        for alert in filtered_alerts
+        if search_text in alert[1].lower()
+        or search_text in alert[3].lower()
+    ]
+
+if severity_filter != "All":
+
+    filtered_alerts = [
+        alert
+        for alert in filtered_alerts
+        if alert[2] == severity_filter
+    ]
 st.subheader("Detected Security Alerts")
+st.caption(
+    f"{len(filtered_alerts)} matching alert(s)"
+)
+if filtered_alerts:
 
-if alerts:
-
-    for alert in alerts:
+    for alert in filtered_alerts:
 
         alert_id = alert[0]
         alert_type = alert[1]
@@ -359,4 +395,7 @@ if alerts:
 
 else:
 
-    st.success("No security alerts detected.")
+    if search_text:
+        st.info("No alerts match your search.")
+    else:
+        st.success("No security alerts detected.")
