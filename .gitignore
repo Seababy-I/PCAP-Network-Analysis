@@ -1,4 +1,5 @@
 keys/private_key.pem
 __pycache__/
 *.pyc
-.env
+.envforensic.db
+forensic.db-journal
