@@ -1,9 +1,18 @@
 import sqlite3
 import streamlit as st
 from risk_scoring import calculate_risk_score
-from crypto_utils import verify_evidence_file
-from database import add_audit_log,verify_audit_chain
+from crypto_utils import (
+    verify_evidence_file,
+    sign_report,
+    verify_report
+)
 
+from database import (
+    add_audit_log,
+    verify_audit_chain
+)
+
+from report_generator import generate_report
 DB_NAME = "forensic.db"
 
 
@@ -226,6 +235,91 @@ if st.button("Verify Audit Chain", key="verify_audit_chain"):
         st.error(
             f"Audit chain verification failed: {e}"
         )
+
+# ==========================================
+# Investigation Report
+# ==========================================
+
+st.subheader("📄 Investigation Report")
+
+col1, col2 = st.columns(2)
+
+with col1:
+
+    if st.button(
+        "Generate & Sign Report",
+        key="generate_report"
+    ):
+
+        try:
+
+            report_path = generate_report()
+
+            signature_path = sign_report(
+                report_path
+            )
+
+            add_audit_log(
+                evidence_id=evidence_id,
+                operation="REPORT_SIGN",
+                status="SUCCESS"
+            )
+
+            st.success(
+                "✅ Report generated and signed."
+            )
+
+            st.write(
+                f"Report: `{report_path}`"
+            )
+
+            st.write(
+                f"Signature: `{signature_path}`"
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Report generation failed: {e}"
+            )
+
+
+with col2:
+
+    if st.button(
+        "Verify Report",
+        key="verify_report"
+    ):
+
+        try:
+
+            report_path = "reports/forensic_report.html"
+            signature_path = (
+                "signatures/forensic_report.html.sig"
+            )
+
+            is_valid = verify_report(
+                report_path,
+                signature_path
+            )
+
+            if is_valid:
+
+                st.success(
+                    "✅ VALID — Report has not been modified."
+                )
+
+            else:
+
+                st.error(
+                    "❌ INVALID — Report may have been modified."
+                )
+
+        except Exception as e:
+
+            st.error(
+                f"Report verification failed: {e}"
+            )
 # ==========================================
 # Detected Alerts
 # ==========================================

@@ -130,3 +130,43 @@ def verify_evidence_file(file_path, signature_path):
         signature,
         public_key
     )
+
+def sign_report(report_path):
+    """
+    Sign a forensic report using the existing RSA private key.
+    Returns the signature path.
+    """
+
+    private_key = load_private_key()
+
+    signature = sign_file(
+        report_path,
+        private_key
+    )
+
+    signature_path = "signatures/forensic_report.html.sig"
+
+    save_signature(
+        signature,
+        signature_path
+    )
+
+    return signature_path
+
+
+def verify_report(report_path, signature_path):
+    """
+    Verify a signed forensic report using the RSA public key.
+    """
+
+    public_key = load_public_key()
+
+    signature = load_signature(
+        signature_path
+    )
+
+    return verify_signature(
+        report_path,
+        signature,
+        public_key
+    )
