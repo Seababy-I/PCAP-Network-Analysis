@@ -13,9 +13,11 @@ from database import (
     insert_tls_record,
     insert_alert,
     count_packets_by_protocol,
+    reconstruct_flows, query_flows, query_top_talkers, query_timeline,
+    add_audit_log, verify_audit_chain, insert_dns_record, insert_http_record,
 )
 
-DB_NAME = "forensic.db"
+DB_NAME = "demo_forensic.db"
 
 
 SAMPLE_PACKETS = [
@@ -42,12 +44,14 @@ def main():
         db_name=DB_NAME,
     )
 
-    insert_packets(SAMPLE_PACKETS, db_name=DB_NAME)
+    ids = insert_packets(SAMPLE_PACKETS, db_name=DB_NAME, evidence_id=evidence_id)
+    insert_dns_record(ids[1], "example.com", "A", db_name=DB_NAME)
+    insert_http_record(ids[3], host="example.com", db_name=DB_NAME)
+    add_audit_log(evidence_id, "IMPORT_DEMO", db_name=DB_NAME, details={"dummy_data": True})
 
-    # Packet IDs are 1-based for a fresh demo database.
-    # TLS record is attached to packet 4 (HTTPS/TCP).
+    # Always use returned IDs; this works on repeated runs too.
     insert_tls_record(
-        packet_id=4,
+        packet_id=ids[3],
         tls_version="TLS 1.3",
         cipher_selected="TLS_AES_128_GCM_SHA256",
         sni="example.com",
@@ -61,13 +65,19 @@ def main():
 
     # Demonstration alert.
     insert_alert(
-        packet_id=9,
+        packet_id=ids[8],
         alert_type="Multiple Connection Attempts",
         severity="Medium",
         description="Several TCP connection attempts were observed to port 22.",
         timestamp="2026-10-06T08:30:06.100Z",
         db_name=DB_NAME,
     )
+
+    reconstruct_flows(DB_NAME, evidence_id)
+    print("Flows:", query_flows(DB_NAME, evidence_id))
+    print("Top talkers:", query_top_talkers(DB_NAME, evidence_id))
+    print("Timeline:", query_timeline(DB_NAME, evidence_id))
+    print("Audit:", verify_audit_chain(DB_NAME))
 
     print(f"Evidence inserted with ID: {evidence_id}")
     print("\nPacket counts:")
