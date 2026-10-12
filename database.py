@@ -90,6 +90,14 @@ def create_database(db_name=DB_NAME):
             ON DELETE SET NULL
     );
     """)
+        # Add evidence_id to existing alerts tables without deleting old records.
+    alert_columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(alerts)").fetchall()
+    }
+
+    if "evidence_id" not in alert_columns:
+        conn.execute("ALTER TABLE alerts ADD COLUMN evidence_id INTEGER")
 
     conn.commit()
     conn.close()
@@ -159,26 +167,49 @@ def insert_tls_record(packet_id, tls_version=None, cipher_selected=None,
     conn.close()
     return tls_id
 
+def insert_alert(
+    packet_id,
+    alert_type,
+    severity,
+    description,
+    timestamp=None,
+    db_name=DB_NAME,
+    evidence_id=None,
+):
+    """Insert an alert and optionally associate it with evidence."""
+    conn = get_connection(db_name)
 
-def insert_alert(packet_id, alert_type, severity, description,
-                  timestamp=None, db_name=DB_NAME):
-    """Insert a forensic alert."""
     if timestamp is None:
         timestamp = datetime.now(timezone.utc).isoformat()
 
-    conn = get_connection(db_name)
-    cur = conn.execute(
+    cursor = conn.execute(
         """
-        INSERT INTO alerts
-        (packet_id, alert_type, severity, description, timestamp)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO alerts (
+            packet_id,
+            alert_type,
+            severity,
+            description,
+            timestamp,
+            evidence_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (packet_id, alert_type, severity, description, timestamp),
+        (
+            packet_id,
+            alert_type,
+            severity,
+            description,
+            timestamp,
+            evidence_id,
+        ),
     )
-    alert_id = cur.lastrowid
+
+    alert_id = cursor.lastrowid
     conn.commit()
     conn.close()
+
     return alert_id
+
 
 
 def insert_packets(packet_rows, db_name=DB_NAME):
