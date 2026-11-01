@@ -1,3 +1,4 @@
-cryptography
-scapy
-streamlit
+cryptography==50.0.2
+scapy==2.8.0
+streamlit==1.65.0
+pyshark==0.6
