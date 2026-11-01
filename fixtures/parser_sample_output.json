@@ -1,0 +1,77 @@
+[
+  {
+    "source_capture": "fixtures/dns_valid.pcap",
+    "packet": {
+      "timestamp": 1700000000.125,
+      "src_ip": "192.0.2.10",
+      "dst_ip": "192.0.2.53",
+      "protocol": "UDP",
+      "src_port": 53000,
+      "dst_port": 53,
+      "length": 71,
+      "frame_number": 1,
+      "tcp_flags": null,
+      "dns_records": [
+        {
+          "query_name": "example.com",
+          "query_type": "1",
+          "response_code": null,
+          "answers": []
+        }
+      ],
+      "http_records": []
+    }
+  },
+  {
+    "source_capture": "fixtures/dns_valid.pcap",
+    "packet": {
+      "timestamp": 1700000001.125,
+      "src_ip": "192.0.2.53",
+      "dst_ip": "192.0.2.10",
+      "protocol": "UDP",
+      "src_port": 53,
+      "dst_port": 53000,
+      "length": 87,
+      "frame_number": 2,
+      "tcp_flags": null,
+      "dns_records": [
+        {
+          "query_name": "example.com",
+          "query_type": "1",
+          "response_code": "0",
+          "answers": [
+            {
+              "name": "example.com",
+              "type": "A",
+              "value": "192.0.2.80"
+            }
+          ]
+        }
+      ],
+      "http_records": []
+    }
+  },
+  {
+    "source_capture": "v6-http.cap",
+    "packet": {
+      "timestamp": 1186341404.199471,
+      "src_ip": "2001:6f8:102d:0:2d0:9ff:fee3:e8de",
+      "dst_ip": "2001:6f8:900:7c0::2",
+      "protocol": "TCP",
+      "src_port": 59201,
+      "dst_port": 80,
+      "length": 314,
+      "frame_number": 49,
+      "tcp_flags": 24,
+      "dns_records": [],
+      "http_records": [
+        {
+          "method": "GET",
+          "host": "cl-1985.ham-01.de.sixxs.net",
+          "uri": "/",
+          "status_code": null
+        }
+      ]
+    }
+  }
+]

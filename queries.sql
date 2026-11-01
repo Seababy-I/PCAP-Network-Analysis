@@ -42,35 +42,9 @@ FROM packets
 GROUP BY protocol
 ORDER BY packet_count DESC;
 
--- 8. TLS records
-SELECT *
-FROM tls_records
-ORDER BY tls_id;
+-- Alerts for a selected capture, including capture-level NULL-packet findings.
+SELECT * FROM alerts WHERE evidence_id = :evidence_id ORDER BY alert_id;
 
--- 9. Alerts
-SELECT *
-FROM alerts
-ORDER BY alert_id;
-
--- 10. Join TLS information with its packet
-SELECT
-    p.packet_id,
-    p.timestamp,
-    p.src_ip,
-    p.dst_ip,
-    p.src_port,
-    p.dst_port,
-    t.tls_version,
-    t.cipher_selected,
-    t.sni,
-    t.cert_issuer,
-    t.is_self_signed
-FROM packets p
-JOIN tls_records t
-    ON p.packet_id = t.packet_id
-ORDER BY p.packet_id;
-
--- Evidence-scoped examples: replace :evidence_id with an ID or bind it in Python.
 -- 11. Top source talkers by bytes (counts outbound traffic only)
 SELECT src_ip, COUNT(*) AS packet_count, SUM(length) AS total_bytes,
        COUNT(DISTINCT dst_ip) AS destination_count
@@ -111,3 +85,12 @@ SELECT src_ip, COUNT(DISTINCT dst_ip) AS destination_count,
 FROM packets WHERE evidence_id = :evidence_id GROUP BY src_ip;
 SELECT src_ip, COUNT(*) AS packets_to_port_22
 FROM packets WHERE evidence_id = :evidence_id AND dst_port = 22 GROUP BY src_ip;
+
+-- Metadata is separate from database IDs.
+SELECT packet_id, evidence_id, frame_number, tcp_flags, length
+FROM packets WHERE evidence_id=:evidence_id ORDER BY frame_number,packet_id;
+
+-- Migration review: preserve historical owners, expose inconsistent associations.
+SELECT a.alert_id, a.evidence_id AS alert_owner, p.evidence_id AS packet_owner
+FROM alerts a JOIN packets p ON p.packet_id=a.packet_id
+WHERE a.evidence_id IS NOT NULL AND a.evidence_id IS NOT p.evidence_id;

@@ -1,15 +1,8 @@
-"""
-PCAP Forensic Tool - SQLite Database Layer
-Aanya's module
+"""SQLite storage, bidirectional flows, scoped forensic queries and audit integrity.
 
-Creates forensic.db and provides:
-- evidence table
-- packets table
-- tls_records table
-- alerts table
-- packet/evidence/TLS/alert insertion helpers
-- forensic SQL query helpers
-- demo data insertion for testing without the parser
+Active application records are DNS and HTTP. Legacy TLS tables are preserved
+without creating, inserting or querying them through the new workflow.
+Packet length means original frame length reported by PyShark packet.length.
 """
 
 import sqlite3
@@ -29,36 +22,56 @@ def get_connection(db_name=DB_NAME):
     return conn
 
 
+def _schema_statements():
+    """Split trusted bundled SQL, preserving complete CREATE TRIGGER bodies."""
+    statement = ""
+    for line in Path(__file__).with_name("schema.sql").read_text(encoding="utf-8").splitlines(True):
+        statement += line
+        if sqlite3.complete_statement(statement):
+            yield statement.strip()
+            statement = ""
+    if statement.strip():
+        raise ValueError("Incomplete bundled schema SQL")
+
+
 def create_database(db_name=DB_NAME):
-    """Create schema and migrate legacy tables without discarding existing rows."""
-    conn = get_connection(db_name)
-    try:
-        with conn:
-            conn.executescript(Path(__file__).with_name("schema.sql").read_text())
-            additions = {
-                "packets": [("evidence_id", "INTEGER REFERENCES evidence(evidence_id)")],
-                "tls_records": [("cert_subject", "TEXT")],
-                "audit_log": [("details", "TEXT NOT NULL DEFAULT '{}'"),
-                              ("hash_version", "INTEGER NOT NULL DEFAULT 1")],
-            }
-            for table, columns in additions.items():
-                existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
-                for name, definition in columns:
-                    if name not in existing:
-                        conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
-            conn.executescript("""
-                CREATE INDEX IF NOT EXISTS idx_packets_evidence_time ON packets(evidence_id, timestamp);
-                CREATE INDEX IF NOT EXISTS idx_packets_src ON packets(src_ip);
-                CREATE INDEX IF NOT EXISTS idx_packets_dst ON packets(dst_ip);
-                CREATE INDEX IF NOT EXISTS idx_packets_protocol ON packets(protocol);
-                CREATE INDEX IF NOT EXISTS idx_tls_packet ON tls_records(packet_id);
-                CREATE INDEX IF NOT EXISTS idx_dns_packet ON dns_records(packet_id);
-                CREATE INDEX IF NOT EXISTS idx_http_packet ON http_records(packet_id);
-                CREATE INDEX IF NOT EXISTS idx_flows_evidence ON flows(evidence_id);
-                CREATE INDEX IF NOT EXISTS idx_flow_packets_flow ON flow_packets(flow_id);
-            """)
-    finally:
-        conn.close()
+    """Atomic, repeatable additive migration; never rebuild/drop application tables.
+
+    Only infer a missing alert owner from its actual packet's known owner.
+    Existing non-NULL alert owners are never overwritten. Unknown historical
+    owners stay NULL; inconsistent pre-existing associations are preserved for
+    review and new/changed associations are checked by triggers.
+    """
+    statements = list(_schema_statements())
+    with closing(get_connection(db_name)) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
+        for statement in statements:
+            # Tables first: indexes/triggers need the migrated columns below.
+            sql = "\n".join(line for line in statement.splitlines() if not line.lstrip().startswith("--")).lstrip()
+            if sql.upper().startswith("CREATE TABLE"):
+                conn.execute(statement)
+        additions = {
+            "packets": [("evidence_id", "INTEGER REFERENCES evidence(evidence_id)"),
+                        ("frame_number", "INTEGER CHECK(frame_number IS NULL OR frame_number >= 1)"),
+                        ("tcp_flags", "INTEGER CHECK(tcp_flags IS NULL OR tcp_flags BETWEEN 0 AND 4095)")],
+            "alerts": [("evidence_id", "INTEGER REFERENCES evidence(evidence_id) ON DELETE RESTRICT")],
+            "audit_log": [("details", "TEXT NOT NULL DEFAULT '{}'"),
+                          ("hash_version", "INTEGER NOT NULL DEFAULT 1")],
+        }
+        for table, columns in additions.items():
+            existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            for name, definition in columns:
+                if name not in existing:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+        conn.execute("""UPDATE alerts SET evidence_id=(SELECT p.evidence_id FROM packets p
+                        WHERE p.packet_id=alerts.packet_id)
+                        WHERE evidence_id IS NULL AND packet_id IS NOT NULL
+                        AND EXISTS(SELECT 1 FROM packets p JOIN evidence e ON e.evidence_id=p.evidence_id
+                                   WHERE p.packet_id=alerts.packet_id)""")
+        for statement in statements:
+            sql = "\n".join(line for line in statement.splitlines() if not line.lstrip().startswith("--")).lstrip()
+            if not sql.upper().startswith("CREATE TABLE"):
+                conn.execute(statement)
 
 
 def insert_evidence(filename, sha256=None, signature=None, db_name=DB_NAME):
@@ -80,78 +93,75 @@ def insert_evidence(filename, sha256=None, signature=None, db_name=DB_NAME):
         return evidence_id
 
 
-def insert_packet(timestamp, src_ip, dst_ip, protocol,
-                  src_port=None, dst_port=None, length=0,
-                  db_name=DB_NAME, evidence_id=None):
-    """Insert one packet record and return its packet ID."""
+def _optional_integer(value, name, minimum=0, maximum=None):
+    if value is None:
+        return None
+    if isinstance(value, bool) or isinstance(value, float) and not value.is_integer():
+        raise ValueError(f"{name} must be an integer")
+    try:
+        number = int(value, 16) if isinstance(value, str) and value.lower().startswith("0x") else int(value)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError(f"{name} must be an integer") from error
+    if number < minimum or maximum is not None and number > maximum:
+        raise ValueError(f"{name} is out of range")
+    return number
+
+
+def _insert_packet(conn, timestamp, src_ip, dst_ip, protocol, src_port=None,
+                   dst_port=None, length=0, evidence_id=None, frame_number=None, tcp_flags=None):
+    protocol = str(protocol).strip().upper()
+    if not protocol or protocol == "NONE":
+        raise ValueError("Protocol is required")
+    return conn.execute("""INSERT INTO packets(timestamp,src_ip,dst_ip,protocol,src_port,dst_port,
+        length,evidence_id,frame_number,tcp_flags) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        (_timestamp(timestamp), _ip(src_ip), _ip(dst_ip), protocol, _port(src_port), _port(dst_port),
+         _length(length), evidence_id, _optional_integer(frame_number, "frame_number", 1),
+         _optional_integer(tcp_flags, "tcp_flags", 0, 4095))).lastrowid
+
+
+def insert_packet(timestamp, src_ip, dst_ip, protocol, src_port=None, dst_port=None,
+                  length=0, db_name=DB_NAME, evidence_id=None, frame_number=None, tcp_flags=None):
+    """Return the SQLite ID; frame_number is an independent capture identifier."""
     with closing(get_connection(db_name)) as conn, conn:
-        cur = conn.execute(
-            """
-            INSERT INTO packets
-            (timestamp, src_ip, dst_ip, protocol, src_port, dst_port, length, evidence_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (_timestamp(timestamp), _ip(src_ip), _ip(dst_ip), str(protocol).upper(), _port(src_port), _port(dst_port), _length(length), evidence_id),
-        )
-        packet_id = cur.lastrowid
-        return packet_id
+        return _insert_packet(conn, timestamp, src_ip, dst_ip, protocol, src_port, dst_port,
+                              length, evidence_id, frame_number, tcp_flags)
 
 
-def insert_tls_record(packet_id, tls_version=None, cipher_selected=None,
-                       sni=None, cert_issuer=None, cert_not_before=None,
-                       cert_not_after=None, cert_sha256=None,
-                       is_self_signed=False, db_name=DB_NAME, cert_subject=None):
-    """Insert TLS information associated with a packet."""
+def insert_alert(packet_id, alert_type, severity, description, timestamp=None,
+                 db_name=DB_NAME, evidence_id=None):
+    """Insert packet or capture-level findings, validating and inferring ownership.
+
+    Old positional arguments are preserved; evidence_id is an added keyword.
+    If both owners are unknown, retain an unassigned historical-style finding.
+    """
     with closing(get_connection(db_name)) as conn, conn:
-        cur = conn.execute(
-            """
-            INSERT INTO tls_records
-            (packet_id, tls_version, cipher_selected, sni, cert_issuer,
-             cert_not_before, cert_not_after, cert_sha256, is_self_signed, cert_subject)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                packet_id, tls_version, cipher_selected, sni, cert_issuer,
-                cert_not_before, cert_not_after, cert_sha256,
-                int(bool(is_self_signed)), cert_subject,
-            ),
-        )
-        tls_id = cur.lastrowid
-        return tls_id
-
-
-def insert_alert(packet_id, alert_type, severity, description,
-                  timestamp=None, db_name=DB_NAME):
-    """Insert a forensic alert."""
-    if timestamp is None:
-        timestamp = datetime.now(timezone.utc).isoformat()
-
-    with closing(get_connection(db_name)) as conn, conn:
-        cur = conn.execute(
-            """
-            INSERT INTO alerts
-            (packet_id, alert_type, severity, description, timestamp)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (packet_id, alert_type, severity, description, _timestamp(timestamp)),
-        )
-        alert_id = cur.lastrowid
-        return alert_id
+        conn.execute("BEGIN IMMEDIATE")
+        if evidence_id is not None and not conn.execute(
+                "SELECT 1 FROM evidence WHERE evidence_id=?", (evidence_id,)).fetchone():
+            raise ValueError("Unknown evidence_id")
+        if packet_id is not None:
+            packet = conn.execute("SELECT evidence_id FROM packets WHERE packet_id=?", (packet_id,)).fetchone()
+            if packet is None:
+                raise ValueError("Unknown packet_id")
+            if evidence_id is not None and evidence_id != packet["evidence_id"]:
+                raise ValueError("Packet/evidence ownership mismatch")
+            evidence_id = packet["evidence_id"] if evidence_id is None else evidence_id
+        return conn.execute("""INSERT INTO alerts(evidence_id,packet_id,alert_type,severity,description,timestamp)
+            VALUES(?,?,?,?,?,?)""", (evidence_id,packet_id,alert_type,severity,description,
+                _timestamp(timestamp or datetime.now(timezone.utc)))).lastrowid
 
 
 def insert_packets(packet_rows, db_name=DB_NAME, evidence_id=None):
-    """Atomically store seven-field parser rows; return actual packet IDs."""
+    """Atomically store legacy seven-field rows; return actual generated IDs.
+
+    Use the structured bridge or insert_packet for frame_number/tcp_flags.
+    """
     ids = []
     with closing(get_connection(db_name)) as conn, conn:
         for row in packet_rows:
             if len(row) != 7:
                 raise ValueError("Each packet requires seven fields")
-            cur = conn.execute(
-                """INSERT INTO packets(timestamp,src_ip,dst_ip,protocol,src_port,dst_port,length,evidence_id)
-                   VALUES(?,?,?,?,?,?,?,?)""",
-                (_timestamp(row[0]), _ip(row[1]), _ip(row[2]), str(row[3]).upper(),
-                 _port(row[4]), _port(row[5]), _length(row[6]), evidence_id))
-            ids.append(cur.lastrowid)
+            ids.append(_insert_packet(conn, *row, evidence_id=evidence_id))
     return ids
 
 
@@ -210,42 +220,10 @@ def query_by_ip(ip, db_name=DB_NAME):
     )
 
 
-def query_tls(db_name=DB_NAME):
-    return fetch_all(
-        """
-        SELECT
-            t.tls_id,
-            t.packet_id,
-            t.tls_version,
-            t.cipher_selected,
-            t.sni,
-            t.cert_issuer,
-            t.cert_not_before,
-            t.cert_not_after,
-            t.cert_sha256,
-            t.is_self_signed
-        FROM tls_records t
-        ORDER BY t.tls_id
-        """,
-        db_name=db_name,
-    )
-
-
-def query_alerts(db_name=DB_NAME):
-    return fetch_all(
-        """
-        SELECT
-            a.alert_id,
-            a.packet_id,
-            a.alert_type,
-            a.severity,
-            a.description,
-            a.timestamp
-        FROM alerts a
-        ORDER BY a.alert_id
-        """,
-        db_name=db_name,
-    )
+def query_alerts(db_name=DB_NAME, evidence_id=None):
+    """Include packet and NULL-packet alerts owned by the selected evidence."""
+    clause, params = _scope(evidence_id)
+    return fetch_all("SELECT * FROM alerts" + clause + " ORDER BY alert_id", params, db_name)
 
 
 def count_packets_by_protocol(db_name=DB_NAME):
@@ -476,9 +454,9 @@ def query_packets(db_name=DB_NAME, evidence_id=None, ip=None, protocol=None,
 
 
 def query_protocol_records(kind, db_name=DB_NAME, evidence_id=None):
-    tables = {"dns": "dns_records", "http": "http_records", "tls": "tls_records"}
+    tables = {"dns": "dns_records", "http": "http_records"}
     if kind not in tables:
-        raise ValueError("Kind must be dns, http or tls")
+        raise ValueError("Kind must be dns or http")
     clause, params = _scope(evidence_id, "p.")
     return fetch_all(f"SELECT r.*, p.evidence_id,p.timestamp,p.src_ip,p.dst_ip FROM {tables[kind]} r "
                      "JOIN packets p USING(packet_id)" + clause + " ORDER BY p.packet_id", params, db_name)

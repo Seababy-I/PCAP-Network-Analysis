@@ -10,7 +10,6 @@ from database import (
     create_database,
     insert_evidence,
     insert_packets,
-    insert_tls_record,
     insert_alert,
     count_packets_by_protocol,
     reconstruct_flows, query_flows, query_top_talkers, query_timeline,
@@ -38,9 +37,9 @@ def main():
     create_database(DB_NAME)
 
     evidence_id = insert_evidence(
-        filename="sample.pcap",
-        sha256="DEMO_SHA256_REPLACE_WITH_REAL_HASH",
-        signature="DEMO_SIGNATURE_REPLACE_WITH_REAL_RSA_SIGNATURE",
+        filename="SIMULATED_DEMO_NOT_REAL_PCAP",
+        sha256=None,
+        signature=None,
         db_name=DB_NAME,
     )
 
@@ -49,23 +48,10 @@ def main():
     insert_http_record(ids[3], host="example.com", db_name=DB_NAME)
     add_audit_log(evidence_id, "IMPORT_DEMO", db_name=DB_NAME, details={"dummy_data": True})
 
-    # Always use returned IDs; this works on repeated runs too.
-    insert_tls_record(
-        packet_id=ids[3],
-        tls_version="TLS 1.3",
-        cipher_selected="TLS_AES_128_GCM_SHA256",
-        sni="example.com",
-        cert_issuer="Example CA",
-        cert_not_before="2026-01-01",
-        cert_not_after="2027-01-01",
-        cert_sha256="DEMO_CERT_SHA256",
-        is_self_signed=False,
-        db_name=DB_NAME,
-    )
-
     # Demonstration alert.
     insert_alert(
         packet_id=ids[8],
+        evidence_id=evidence_id,
         alert_type="Multiple Connection Attempts",
         severity="Medium",
         description="Several TCP connection attempts were observed to port 22.",

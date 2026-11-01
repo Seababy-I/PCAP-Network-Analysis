@@ -34,7 +34,7 @@ def dispatch(path, params, db_name):
         if flow_id is None:
             raise ValueError('flow_id is required')
         return db.query_flow_packets(flow_id, db_name)
-    if path in ('/api/tls', '/api/dns', '/api/http'):
+    if path in ('/api/dns', '/api/http'):
         return db.query_protocol_records(path.split('/')[-1], db_name, evidence_id)
     if path == '/api/audit':
         return db.query_audit_log(db_name, evidence_id)
@@ -44,9 +44,7 @@ def dispatch(path, params, db_name):
     if path == '/api/evidence':
         return db.fetch_all('SELECT * FROM evidence ORDER BY evidence_id', db_name=db_name)
     if path == '/api/alerts':
-        return db.fetch_all('''SELECT a.*,p.evidence_id FROM alerts a LEFT JOIN packets p USING(packet_id)'''
-            + (' WHERE p.evidence_id=?' if evidence_id is not None else '') + ' ORDER BY a.alert_id',
-            (evidence_id,) if evidence_id is not None else (), db_name)
+        return db.query_alerts(db_name=db_name, evidence_id=evidence_id)
     raise KeyError('Unknown endpoint')
 
 

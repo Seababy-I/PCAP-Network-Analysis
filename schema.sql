@@ -17,27 +17,14 @@ CREATE TABLE IF NOT EXISTS packets (
     protocol TEXT NOT NULL,
     src_port INTEGER,
     dst_port INTEGER,
-    length INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS tls_records (
-    tls_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    packet_id INTEGER NOT NULL,
-    tls_version TEXT,
-    cipher_selected TEXT,
-    sni TEXT,
-    cert_subject TEXT,
-    cert_issuer TEXT,
-    cert_not_before TEXT,
-    cert_not_after TEXT,
-    cert_sha256 TEXT,
-    is_self_signed INTEGER NOT NULL DEFAULT 0,
-    FOREIGN KEY (packet_id) REFERENCES packets(packet_id)
-        ON DELETE CASCADE
+    length INTEGER NOT NULL,
+    frame_number INTEGER CHECK(frame_number IS NULL OR frame_number >= 1),
+    tcp_flags INTEGER CHECK(tcp_flags IS NULL OR tcp_flags BETWEEN 0 AND 4095)
 );
 
 CREATE TABLE IF NOT EXISTS alerts (
     alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    evidence_id INTEGER REFERENCES evidence(evidence_id) ON DELETE RESTRICT,
     packet_id INTEGER,
     alert_type TEXT NOT NULL,
     severity TEXT NOT NULL,
@@ -80,3 +67,52 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE TRIGGER IF NOT EXISTS preserve_audited_evidence
 BEFORE DELETE ON evidence WHEN EXISTS(SELECT 1 FROM audit_log WHERE evidence_id=OLD.evidence_id)
 BEGIN SELECT RAISE(ABORT, 'Cannot delete audited evidence'); END;
+
+CREATE INDEX IF NOT EXISTS idx_packets_evidence_time ON packets(evidence_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_packets_src ON packets(src_ip);
+CREATE INDEX IF NOT EXISTS idx_packets_dst ON packets(dst_ip);
+CREATE INDEX IF NOT EXISTS idx_packets_protocol ON packets(protocol);
+CREATE INDEX IF NOT EXISTS idx_alerts_evidence ON alerts(evidence_id);
+CREATE INDEX IF NOT EXISTS idx_dns_packet ON dns_records(packet_id);
+CREATE INDEX IF NOT EXISTS idx_http_packet ON http_records(packet_id);
+CREATE INDEX IF NOT EXISTS idx_flows_evidence ON flows(evidence_id);
+CREATE INDEX IF NOT EXISTS idx_flow_packets_flow ON flow_packets(flow_id);
+
+-- Validation triggers also cover legacy columns without a declared FK.
+CREATE TRIGGER IF NOT EXISTS alerts_validate_insert
+BEFORE INSERT ON alerts BEGIN
+    SELECT CASE WHEN NEW.evidence_id IS NOT NULL AND NOT EXISTS
+        (SELECT 1 FROM evidence WHERE evidence_id=NEW.evidence_id)
+        THEN RAISE(ABORT, 'Unknown alert evidence_id') END;
+    SELECT CASE WHEN NEW.packet_id IS NOT NULL AND NOT EXISTS
+        (SELECT 1 FROM packets WHERE packet_id=NEW.packet_id)
+        THEN RAISE(ABORT, 'Unknown alert packet_id') END;
+    SELECT CASE WHEN NEW.packet_id IS NOT NULL AND NEW.evidence_id IS NOT NULL AND NOT EXISTS
+        (SELECT 1 FROM packets WHERE packet_id=NEW.packet_id AND evidence_id=NEW.evidence_id)
+        THEN RAISE(ABORT, 'Packet/evidence ownership mismatch') END;
+END;
+CREATE TRIGGER IF NOT EXISTS alerts_validate_update
+BEFORE UPDATE OF evidence_id,packet_id ON alerts BEGIN
+    SELECT CASE WHEN NEW.evidence_id IS NOT NULL AND NOT EXISTS
+        (SELECT 1 FROM evidence WHERE evidence_id=NEW.evidence_id)
+        THEN RAISE(ABORT, 'Unknown alert evidence_id') END;
+    SELECT CASE WHEN NEW.packet_id IS NOT NULL AND NOT EXISTS
+        (SELECT 1 FROM packets WHERE packet_id=NEW.packet_id)
+        THEN RAISE(ABORT, 'Unknown alert packet_id') END;
+    SELECT CASE WHEN NEW.packet_id IS NOT NULL AND NEW.evidence_id IS NOT NULL AND NOT EXISTS
+        (SELECT 1 FROM packets WHERE packet_id=NEW.packet_id AND evidence_id=NEW.evidence_id)
+        THEN RAISE(ABORT, 'Packet/evidence ownership mismatch') END;
+END;
+CREATE TRIGGER IF NOT EXISTS alerts_infer_insert
+AFTER INSERT ON alerts WHEN NEW.evidence_id IS NULL AND NEW.packet_id IS NOT NULL BEGIN
+    UPDATE alerts SET evidence_id=(SELECT evidence_id FROM packets WHERE packet_id=NEW.packet_id)
+    WHERE alert_id=NEW.alert_id;
+END;
+CREATE TRIGGER IF NOT EXISTS preserve_alert_evidence
+BEFORE DELETE ON evidence WHEN EXISTS(SELECT 1 FROM alerts WHERE evidence_id=OLD.evidence_id)
+BEGIN SELECT RAISE(ABORT, 'Cannot delete evidence referenced by alerts'); END;
+CREATE TRIGGER IF NOT EXISTS packets_preserve_alert_owner
+BEFORE UPDATE OF evidence_id ON packets
+WHEN EXISTS(SELECT 1 FROM alerts WHERE packet_id=OLD.packet_id AND evidence_id IS NOT NULL
+            AND evidence_id IS NOT NEW.evidence_id)
+BEGIN SELECT RAISE(ABORT, 'Packet update would change alert ownership'); END;
