@@ -1,0 +1,5 @@
+[
+  {"timestamp":1700000000.125,"frame_number":1,"src_ip":"10.0.0.1","dst_ip":"10.0.0.2","protocol":"TCP","src_port":50000,"dst_port":80,"length":74,"tcp_flags":2,"dns_records":[],"http_records":[{"method":"GET","host":"example.com","uri":"/","status_code":null}]},
+  {"timestamp":1700000001.25,"frame_number":2,"src_ip":"2001:db8::1","dst_ip":"2001:db8::53","protocol":"UDP","src_port":53000,"dst_port":53,"length":96,"tcp_flags":null,"dns_records":[{"query_name":"example.com","query_type":"AAAA","response_code":"0","answers":[{"name":"example.com","type":"AAAA","value":"2001:db8::2"}]}],"http_records":[]},
+  {"timestamp":1700000002.0,"frame_number":3,"src_ip":"2001:db8::1","dst_ip":"2001:db8::2","protocol":"ICMPv6","src_port":null,"dst_port":null,"length":86,"tcp_flags":null,"dns_records":[],"http_records":[]}
+]

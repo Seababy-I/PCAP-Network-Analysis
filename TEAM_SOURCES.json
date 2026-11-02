@@ -1,0 +1,160 @@
+{
+  "repository": "Seababy-I/PCAP-Network-Analysis",
+  "commit": "843b6898c29b27714e97da1010900496b7c7a88c",
+  "files": [
+    {
+      "installed": "database.py",
+      "source": "database.py",
+      "git_blob_sha1": "a559dc62bc037cb96b2d6b47f3cbb78cfb9cfe55",
+      "sha256": "10bc8480d15ab8151060cbc16a504ee9548a2878b03d7fb42e73163abd1ab808",
+      "installed_sha256": "10bc8480d15ab8151060cbc16a504ee9548a2878b03d7fb42e73163abd1ab808",
+      "local_patch": false
+    },
+    {
+      "installed": "schema.sql",
+      "source": "schema.sql",
+      "git_blob_sha1": "bd7fa1728c4309094d590c8645a89a4ed7cd9346",
+      "sha256": "c483b79a1a4fc8fe3dfa2ffa5f9ddfa8b97f8bdafa6898c78365a3f47386dbce",
+      "installed_sha256": "c483b79a1a4fc8fe3dfa2ffa5f9ddfa8b97f8bdafa6898c78365a3f47386dbce",
+      "local_patch": false
+    },
+    {
+      "installed": "parser_db_bridge.py",
+      "source": "parser_db_bridge.py",
+      "git_blob_sha1": "bf986c752eb6dfeefc6cf96f3b81dc3b2cbdf025",
+      "sha256": "881a22d031742769f22384496f0ea052ea1ace16881753efa33b39b83d36eb85",
+      "installed_sha256": "881a22d031742769f22384496f0ea052ea1ace16881753efa33b39b83d36eb85",
+      "local_patch": false
+    },
+    {
+      "installed": "parser.py",
+      "source": "parser.py",
+      "git_blob_sha1": "3c3e28f6140be40353e1efa934fefba2407aa804",
+      "sha256": "82ab347079630f8eb2fbd6a02804c5f0e7b9a5f732394dd605c8a45098b6976b",
+      "installed_sha256": "32567de67d5c1b9e626ef427b7129f22534094d4ff2c525429c8eee3d808858b",
+      "local_patch": true
+    },
+    {
+      "installed": "team_tests/test_database.py",
+      "source": "test_database.py",
+      "git_blob_sha1": "ecae294891b810060547d9d4b05efd9033b16786",
+      "sha256": "7bc11cae813559721fd81278ee37654e807f6d8a40c70dc1c0f44e5687e6126d",
+      "installed_sha256": "7bc11cae813559721fd81278ee37654e807f6d8a40c70dc1c0f44e5687e6126d",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/test_parser_database.py",
+      "source": "test_parser_database.py",
+      "git_blob_sha1": "5fe50ed46757fdfc8ffd7e812092d33f59429372",
+      "sha256": "8e5599f102a1bfe7c91aefd71f5c32b087bd45c335de08ac3b1bf429e58dfb95",
+      "installed_sha256": "8e5599f102a1bfe7c91aefd71f5c32b087bd45c335de08ac3b1bf429e58dfb95",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/import_real_pcap.py",
+      "source": "import_real_pcap.py",
+      "git_blob_sha1": "9632164213e413dc3c9768c9c5eaf5b28b0ef168",
+      "sha256": "98970b4dc9850507c25988dabab6ce6aeb86b4d227d51e886d7e7a02c2f5f64c",
+      "installed_sha256": "98970b4dc9850507c25988dabab6ce6aeb86b4d227d51e886d7e7a02c2f5f64c",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/query_api.py",
+      "source": "query_api.py",
+      "git_blob_sha1": "0748b3c720db1ba6044cd6aa36e4ab4615443299",
+      "sha256": "92c8de141c0aecbb8deb6b7e2b3082c829663a4fbd6604b861534560e8627a38",
+      "installed_sha256": "92c8de141c0aecbb8deb6b7e2b3082c829663a4fbd6604b861534560e8627a38",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/data/sample.pcap",
+      "source": "data/sample.pcap",
+      "git_blob_sha1": "2cf77bff1ce1d33534b157ede35d9a903d8987ae",
+      "sha256": "e8f1e242ff95c6aa3b5c05c3a54e0c48ac36d4dcec0a32a47b5f0e31b0a52580",
+      "installed_sha256": "e8f1e242ff95c6aa3b5c05c3a54e0c48ac36d4dcec0a32a47b5f0e31b0a52580",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/data/detection_test.pcap",
+      "source": "data/detection_test.pcap",
+      "git_blob_sha1": "61e2ed751b61c1f45d2b174127a93af01c42849c",
+      "sha256": "fa55b3e167222dcff3b2a9e288166907d065c21302bb14a22bef6f50126964bb",
+      "installed_sha256": "fa55b3e167222dcff3b2a9e288166907d065c21302bb14a22bef6f50126964bb",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/data/tampered.pcap",
+      "source": "data/tampered.pcap",
+      "git_blob_sha1": "72062ec2fb33451e06686c99dd14d894d1646510",
+      "sha256": "bba9fe01cd9e4f1cb97bde7e3bf7ba78112a5fa737a6b656431e17ece02394d8",
+      "installed_sha256": "bba9fe01cd9e4f1cb97bde7e3bf7ba78112a5fa737a6b656431e17ece02394d8",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/v6-http.cap",
+      "source": "v6-http.cap",
+      "git_blob_sha1": "11ebe6243a5f47cae8180629131dcf4f5d19af63",
+      "sha256": "8e40db7c7918d8efd4a554bf596017325e6d8b53cef940b4bc2e2d9b9000f6d9",
+      "installed_sha256": "8e40db7c7918d8efd4a554bf596017325e6d8b53cef940b4bc2e2d9b9000f6d9",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/fixtures/dns_valid.pcap",
+      "source": "fixtures/dns_valid.pcap",
+      "git_blob_sha1": "f71fbf5378d96d8a63ae4d60a85b8ef12f5dc81b",
+      "sha256": "7a10fc5fd8bb142a4fb596a244c2aeb431cf4339a2f44a31c6161a900d0b5ada",
+      "installed_sha256": "7a10fc5fd8bb142a4fb596a244c2aeb431cf4339a2f44a31c6161a900d0b5ada",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/fixtures/ipv6_vlan_http.pcap",
+      "source": "fixtures/ipv6_vlan_http.pcap",
+      "git_blob_sha1": "1940316f5ca9758204e6e9e849e1a5d99ad62416",
+      "sha256": "8e8ff07cb95fa33ac16036c6bef62d83321246efb2fc548ccb6c97cf7cc872a1",
+      "installed_sha256": "8e8ff07cb95fa33ac16036c6bef62d83321246efb2fc548ccb6c97cf7cc872a1",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/fixtures/ipv6_vlan_http.pcapng",
+      "source": "fixtures/ipv6_vlan_http.pcapng",
+      "git_blob_sha1": "25781094c01f38c4b724a596501f468ad5258f47",
+      "sha256": "2759088a6b2aaebe5616be512c6d6be4fd43553273ca8ce2edab5bc84cdc16fd",
+      "installed_sha256": "2759088a6b2aaebe5616be512c6d6be4fd43553273ca8ce2edab5bc84cdc16fd",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/fixtures/malformed_capture.pcap",
+      "source": "fixtures/malformed_capture.pcap",
+      "git_blob_sha1": "cd961ac8ca00010326a48e5c3f8acda03e0b42f3",
+      "sha256": "b1a35d1ecad0635e397578aec4eaddcbcb402671a6b269252540ed65c34178e6",
+      "installed_sha256": "b1a35d1ecad0635e397578aec4eaddcbcb402671a6b269252540ed65c34178e6",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/fixtures/representative_packets.json",
+      "source": "fixtures/representative_packets.json",
+      "git_blob_sha1": "a513fff0686603f39108ab2454518c91cdd5ca0d",
+      "sha256": "2f803e6e506a9c9da6e0450cdeeabf62efbb65767ff949b61197c8f3af685a3c",
+      "installed_sha256": "2f803e6e506a9c9da6e0450cdeeabf62efbb65767ff949b61197c8f3af685a3c",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/fixtures/parser_sample_output.json",
+      "source": "fixtures/parser_sample_output.json",
+      "git_blob_sha1": "3987cf43d2d141f81d2baf6e35a1bf9b696a5006",
+      "sha256": "644c6de8598959b861a63bb5572749fd49eff33d264f08c1109e9e1ef70968c0",
+      "installed_sha256": "644c6de8598959b861a63bb5572749fd49eff33d264f08c1109e9e1ef70968c0",
+      "local_patch": false
+    },
+    {
+      "installed": "team_tests/fixtures/README.md",
+      "source": "fixtures/README.md",
+      "git_blob_sha1": "0a7af9fea203fd217905d4552cdf7c504a5cf85a",
+      "sha256": "9c0af4a3145b524f0e0f93ac15b81470c738ea1fe03a25951f19cf8089e623fb",
+      "installed_sha256": "9c0af4a3145b524f0e0f93ac15b81470c738ea1fe03a25951f19cf8089e623fb",
+      "local_patch": false
+    }
+  ],
+  "parser_acceptance": "SUPPORTED_SUBSET: repeated fields and strict extraction checks tested; see INTEGRATION_STATUS.md",
+  "database_confidentiality": "DEFERRED_BY_USER: plaintext metadata"
+}

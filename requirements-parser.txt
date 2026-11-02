@@ -1,0 +1,3 @@
+# Optional parser-preview environment. Does not activate the teammate parser.
+# Pin selected for isolated import/compatibility review; Jahnnavi must confirm her tested versions.
+pyshark==0.6
