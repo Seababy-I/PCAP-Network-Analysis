@@ -3,3 +3,5 @@
 *.pcapng binary
 *.cap binary
 *.sig binary
+*.pdf binary
+*.png binary
