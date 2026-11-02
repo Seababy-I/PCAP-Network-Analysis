@@ -1,5 +1,12 @@
 # PCAP Forensic Tool
 
+## Demo and viva materials
+
+- [Complete demo walkthrough](docs/PCAP_Demo_Walkthrough.md) with clicks, expected outputs, spoken explanations, a short version and recovery notes. [Printable PDF](docs/PCAP_Demo_Walkthrough.pdf).
+- [Viva handbook](docs/PCAP_Viva_Handbook.md) covering architecture, algorithms, cryptography, storage, failure paths, testing, limits and 70 questions with answers. [Printable PDF](docs/PCAP_Viva_Handbook.pdf).
+- [Source code study index](docs/PCAP_Source_Index.md) with exact function links at the tested code baseline.
+- [System flow diagram](docs/PCAP_System_Architecture.png) and [database relationships](docs/PCAP_Database_Relationships.png).
+
 **Functional integration is now available:** full-parser mode stores packets/DNS/HTTP/conversations and adds Investigation views/report summaries. It is labeled `INTEGRATED_LIMITED` because supported parsing has documented limits and database metadata remains plaintext by project decision. See `INTEGRATION_STATUS.md`. Start with `python launch_dashboard.py`; it uses `.venv-parser` when available. Full mode requires acknowledgement that parsed SQLite metadata is currently unencrypted.
 
 **Confidentiality update:** new managed captures/reports and report-export bundles are encrypted by default. Start with `python launch_dashboard.py`, create your local vault passphrase on first launch, then unlock. CLI imports/signing prompt privately for that passphrase. See `CONFIDENTIALITY.md` for the threat model, encrypted-export commands, legacy-data limits and the deferred database encryption limitation. Historical data is preserved; SQLite metadata is still plaintext.
