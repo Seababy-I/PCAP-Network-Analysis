@@ -4,6 +4,8 @@ import os
 import shutil
 import logging
 import struct
+import math
+import ipaddress
 from pathlib import Path
 import pyshark
 
@@ -13,6 +15,15 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+class ParserExtractionError(RuntimeError):
+    """Fatal extraction failure with structured frame/progress information."""
+    def __init__(self, frame_number, parsed_count, cause):
+        self.frame_number = to_integer(frame_number)
+        self.parsed_count = parsed_count
+        self.failed_count = 1
+        super().__init__(f"Extraction failed for frame {frame_number}: {cause}")
 
 def find_tshark(tshark_path=None):
 
@@ -87,6 +98,8 @@ def to_integer(value):
     if value is None:
         return None
     try:
+        if isinstance(value, bool):
+            return None
         if isinstance(value, int):
             return value
         value = str(value).strip()
@@ -174,86 +187,101 @@ def extract_tcp_flags(packet):
     flags = get_field(tcp_layer, "flags")
     return to_integer(flags)
 
-def extract_dns_records(packet):
-    dns_records = []
-    try:
-        dns_layers = [
-            layer for layer in packet.layers
-            if getattr(layer, "layer_name", "").lower() == "dns"
-        ]
-    except Exception:
-        return dns_records
-    for dns_layer in dns_layers:
-        query_name = get_field(dns_layer, "qry_name")
-        query_type = get_field(dns_layer, "qry_type")
-        response_code = get_field(dns_layer, "flags_rcode")
-        answers = []
-        # DNS answer fields and their corresponding record types
-        answer_fields = {
-            "a": "A",
-            "aaaa": "AAAA",
-            "cname": "CNAME",
-            "mx": "MX",
-            "ns": "NS",
-            "ptr": "PTR",
-            "txt": "TXT"
-        }
-        answer_name = (
-            get_field(dns_layer, "resp_name")
-            or query_name
-        )
-        for field_name, record_type in answer_fields.items():
-            answer_value = get_field(dns_layer, field_name)
-            if answer_value is None:
-                continue
-            # Some PyShark fields may contain multiple values.
-            if isinstance(answer_value, (list, tuple)):
-                values = answer_value
-            else:
-                values = [answer_value]
-            for value in values:
-                if value is None:
-                    continue
-                answers.append({
-                    "name": answer_name,
-                    "type": record_type,
-                    "value": str(value)
-                })
-        # Only store DNS records when meaningful DNS information
-        # was successfully extracted.
+def field_values(layer, name):
+    """Read every PDML occurrence, rather than only PyShark's default field."""
+    if layer is None:
+        return []
+    field = layer.get_field(name)
+    if field is None:
+        return []
+    fields = getattr(field, "all_fields", None)
+    if fields is None:
+        fields = [field]
+    values = []
+    for item in fields:
+        value = getattr(item, "show", None)
+        if value is None:
+            value = str(item)
+        if value is not None and str(value).strip():
+            values.append(str(value).strip())
+    return values
 
-        if any([
-            query_name,
-            query_type,
-            response_code,
-            answers
-        ]):
-            dns_records.append({
-                "query_name": query_name,
-                "query_type": query_type,
-                "response_code": response_code,
-                "answers": answers
-            })
-    return dns_records
+
+def checked_number(raw, name, low, high):
+    value = to_integer(raw)
+    if value is None or not low <= value <= high:
+        raise ValueError(f"Invalid {name}: {raw!r}")
+    return value
+
+
+def extract_dns_records(packet):
+    records = []
+    for layer in packet.layers:
+        if getattr(layer, "layer_name", "").lower() != "dns":
+            continue
+        names = field_values(layer, "qry_name")
+        types = field_values(layer, "qry_type")
+        codes = field_values(layer, "flags_rcode")
+        for raw in types:
+            checked_number(raw, "DNS query type", 0, 65535)
+        for raw in codes:
+            checked_number(raw, "DNS response code", 0, 4095)
+        # Resource-record name/type/length are parallel PDML fields. Retain
+        # each answer's actual owner, including mixed CNAME/A responses.
+        owners = field_values(layer, "resp_name")
+        rrtypes = field_values(layer, "resp_type")
+        values = {}
+        mapping = {1:("a","A"),28:("aaaa","AAAA"),5:("cname","CNAME"),
+                   15:("mx_mail_exchange","MX"),2:("ns","NS"),12:("ptr_domain_name","PTR"),16:("txt","TXT")}
+        for number,(field,label) in mapping.items():
+            values[number] = iter(field_values(layer, field))
+        if len(field_values(layer, "txt")) > sum(to_integer(t)==16 for t in rrtypes):
+            raise ValueError("Multi-string TXT resources are not supported; refusing incomplete extraction")
+        answers = []
+        if len(owners) != len(rrtypes):
+            raise ValueError("DNS resource record names/types are inconsistent")
+        for owner,raw_type in zip(owners,rrtypes):
+            number = checked_number(raw_type, "DNS resource type", 0, 65535)
+            if number not in mapping:
+                continue  # Unsupported RR types are not claimed as extracted.
+            value = next(values[number], None)
+            if value is None:
+                raise ValueError("DNS resource record value is missing")
+            if number in (1,28):
+                ipaddress.ip_address(value)
+            answers.append(dict(name=owner,type=mapping[number][1],value=value))
+        if len(names) != len(types):
+            raise ValueError("DNS question names/types are inconsistent")
+        # A DNS message can contain multiple questions. Its full resource list
+        # belongs to the message; store it once, on the first question row.
+        for index in range(max(1,len(names))):
+            records.append(dict(query_name=names[index] if names else None,
+                query_type=types[index] if types else None,
+                response_code=codes[0] if codes else None,
+                answers=answers if index==0 else []))
+    return records
+
 
 def extract_http_records(packet):
-    http_records = []
-    http_layer = get_layer(packet, "http")
-    if http_layer is None:
-        return http_records
-    method = get_field(http_layer, "request_method")
-    host = get_field(http_layer, "host")
-    uri = get_field(http_layer, "request_uri")
-    status_code = to_integer(
-        get_field(http_layer, "response_code")
-    )
-    http_records.append({
-        "method": method,
-        "host": host,
-        "uri": uri,
-        "status_code": status_code
-    })
-    return http_records
+    records = []
+    for layer in packet.layers:
+        if getattr(layer, "layer_name", "").lower() != "http":
+            continue
+        methods = field_values(layer, "request_method")
+        hosts = field_values(layer, "host")
+        uris = field_values(layer, "request_uri")
+        statuses = field_values(layer, "response_code")
+        # TShark PDML normally provides one layer per HTTP message. Reject
+        # ambiguous groupings rather than assigning one message's host to another.
+        if any(len(values)>1 for values in (methods,hosts,uris,statuses)):
+            raise ValueError("Ambiguous HTTP message grouping in TShark output")
+        if not any((methods,hosts,uris,statuses)):
+            continue
+        records.append(dict(method=methods[0] if methods else None,
+            host=hosts[0] if hosts else None,uri=uris[0] if uris else None,
+            status_code=checked_number(statuses[0],"HTTP status",100,599) if statuses else None))
+    return records
+
 
 def extract_packet(packet):
     # Original PCAP frame number
@@ -268,13 +296,13 @@ def extract_packet(packet):
     length = get_packet_length(packet)
 
     # Required database fields
-    if timestamp is None:
+    if timestamp is None or not math.isfinite(timestamp):
         raise ValueError("Packet timestamp is missing or invalid.")
 
-    if length is None:
+    if length is None or length < 0:
         raise ValueError("Packet length is missing or invalid.")
 
-    if frame_number is None:
+    if frame_number is None or frame_number < 1:
         raise ValueError("Packet frame number is missing or invalid.")
 
     # IP addresses
@@ -288,6 +316,17 @@ def extract_packet(packet):
 
     # TCP flags
     tcp_flags = extract_tcp_flags(packet)
+
+    for address in (src_ip, dst_ip):
+        if address is not None:
+            ipaddress.ip_address(address)
+    if protocol in ("TCP", "UDP"):
+        if src_ip is None or dst_ip is None:
+            raise ValueError("Transport packet has no valid IP addresses")
+        checked_number(src_port, "source port", 0, 65535)
+        checked_number(dst_port, "destination port", 0, 65535)
+    if protocol == "TCP":
+        checked_number(tcp_flags, "TCP flags", 0, 4095)
 
     # DNS records
     dns_records = extract_dns_records(packet)
@@ -413,10 +452,9 @@ def parse_pcap(path, tshark_path=None):
                     yield packet_data
                 except Exception as error:
                     skipped_count += 1
-                    logger.warning(
-                        "Skipping malformed packet: %s",
-                        error
-                    )
+                    raise ParserExtractionError(getattr(packet, 'number', '?'), parsed_count, error) from error
+        except ParserExtractionError:
+            raise
         except Exception as error:
             raise RuntimeError(
                 f"Fatal error while reading capture. "
@@ -500,4 +538,4 @@ if __name__ == "__main__":
         print("==============================")
     except Exception as error:
         logger.error("Parsing failed: %s", error)
-
+        raise SystemExit(1)
